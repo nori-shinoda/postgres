@@ -76,7 +76,7 @@ static bool xact_got_connection = false;
 static PGconn *connect_pg_server(ForeignServer *server, UserMapping *user);
 static void disconnect_pg_server(ConnCacheEntry *entry);
 static void check_conn_params(const char **keywords, const char **values, UserMapping *user);
-static void configure_remote_session(PGconn *conn);
+static void configure_remote_session(PGconn *conn, ForeignServer *server);
 static void do_sql_command(PGconn *conn, const char *sql);
 static void begin_remote_xact(ConnCacheEntry *entry);
 static void pgfdw_xact_callback(XactEvent event, void *arg);
@@ -284,7 +284,7 @@ connect_pg_server(ForeignServer *server, UserMapping *user)
 					 errhint("Target server's authentication method must be changed.")));
 
 		/* Prepare new session for use */
-		configure_remote_session(conn);
+		configure_remote_session(conn, server);
 
 		pfree(keywords);
 		pfree(values);
@@ -355,9 +355,11 @@ check_conn_params(const char **keywords, const char **values, UserMapping *user)
  * there are any number of ways to break things.
  */
 static void
-configure_remote_session(PGconn *conn)
+configure_remote_session(PGconn *conn, ForeignServer *server)
 {
 	int			remoteversion = PQserverVersion(conn);
+	ListCell *lc;
+	StringInfoData buf;
 
 	/* Force the search path to contain only pg_catalog (see deparse.c) */
 	do_sql_command(conn, "SET search_path = pg_catalog");
@@ -385,6 +387,21 @@ configure_remote_session(PGconn *conn)
 		do_sql_command(conn, "SET extra_float_digits = 3");
 	else
 		do_sql_command(conn, "SET extra_float_digits = 2");
+	
+	// set work_mem option
+	foreach (lc, server->options)
+	{
+		DefElem *def = (DefElem *) lfirst(lc);
+		
+		if (strcmp(def->defname, "work_mem") == 0)
+		{
+			initStringInfo(&buf);
+			appendStringInfo(&buf, "SET work_mem = '%s'", defGetString(def));
+			
+			do_sql_command(conn, buf.data);
+			break;
+		}
+	}
 }
 
 /*
