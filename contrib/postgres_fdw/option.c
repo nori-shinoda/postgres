@@ -177,6 +177,8 @@ InitPgFdwOptions(void)
 		/* fetch_size is available on both server and table */
 		{"fetch_size", ForeignServerRelationId, false},
 		{"fetch_size", ForeignTableRelationId, false},
+		/* work_mem */
+		{"work_mem", ForeignServerRelationId, false},
 		{NULL, InvalidOid, false}
 	};
 
