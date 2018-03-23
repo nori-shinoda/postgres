@@ -22,7 +22,7 @@
 #include "commands/extension.h"
 #include "utils/builtins.h"
 #include "utils/varlena.h"
-
+#include "utils/guc.h"
 
 /*
  * Describes the valid options for objects that this wrapper uses.
@@ -142,6 +142,14 @@ postgres_fdw_validator(PG_FUNCTION_ARGS)
 						(errcode(ERRCODE_SYNTAX_ERROR),
 						 errmsg("%s requires a non-negative integer value",
 								def->defname)));
+		}
+		else if (strcmp(def->defname, "work_mem") == 0)
+                {
+                        if (!parse_int(defGetString(def), NULL, GUC_UNIT_KB, NULL))
+                        	ereport(ERROR,
+                                                (errcode(ERRCODE_SYNTAX_ERROR),
+                                                 errmsg("invalid value for option '%s'",
+                                                                def->defname)));
 		}
 	}
 
