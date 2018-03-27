@@ -313,6 +313,16 @@
      </listitem>
     </varlistentry>
 
+    <varlistentry>
+     <term><literal>work_mem</literal></term>
+     <listitem>
+      <para>
+       This option specifies the size of working memory using <xref linkend="guc-work-mem"/>. 
+       The default value is depend on th remote instance setting.
+      </para>
+     </listitem>
+    </varlistentry>
+
    </variablelist>
 
   </sect3>
