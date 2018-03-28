@@ -924,6 +924,15 @@ static struct config_bool ConfigureNamesBool[] =
 		NULL, NULL, NULL
 	},
 	{
+		{"enable_partitionwise_aggregate", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Enables partitionwise aggregation and grouping."),
+			NULL
+		},
+		&enable_partitionwise_aggregate,
+		false,
+		NULL, NULL, NULL
+	},
+	{
 		{"enable_parallel_append", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Enables the planner's use of parallel append plans."),
 			NULL
@@ -1721,6 +1730,71 @@ static struct config_bool ConfigureNamesBool[] =
 			NULL
 		},
 		&jit_enabled,
+		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"jit_debugging_support", PGC_SU_BACKEND, DEVELOPER_OPTIONS,
+			gettext_noop("Register JIT compiled function with debugger."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&jit_debugging_support,
+		false,
+		/*
+		 * This is not guaranteed to be available, but given it's a developer
+		 * oriented option, it doesn't seem worth adding code checking
+		 * availability.
+		 */
+		NULL, NULL, NULL
+	},
+
+	{
+		{"jit_dump_bitcode", PGC_SUSET, DEVELOPER_OPTIONS,
+			gettext_noop("Write out LLVM bitcode to facilitate JIT debugging."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&jit_dump_bitcode,
+		false,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"jit_expressions", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Allow JIT compilation of expressions."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&jit_expressions,
+		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"jit_profiling_support", PGC_SU_BACKEND, DEVELOPER_OPTIONS,
+			gettext_noop("Register JIT compiled function with perf profiler."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&jit_profiling_support,
+		false,
+		/*
+		 * This is not guaranteed to be available, but given it's a developer
+		 * oriented option, it doesn't seem worth adding code checking
+		 * availability.
+		 */
+		NULL, NULL, NULL
+	},
+
+	{
+		{"jit_tuple_deforming", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Allow JIT compilation of tuple deforming."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&jit_tuple_deforming,
 		true,
 		NULL, NULL, NULL
 	},
@@ -3020,6 +3094,26 @@ static struct config_real ConfigureNamesReal[] =
 		},
 		&parallel_setup_cost,
 		DEFAULT_PARALLEL_SETUP_COST, 0, DBL_MAX,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"jit_above_cost", PGC_USERSET, QUERY_TUNING_COST,
+			gettext_noop("Perform JIT compilation if query is more expensive."),
+			gettext_noop("-1 disables JIT compilation.")
+		},
+		&jit_above_cost,
+		100000, -1, DBL_MAX,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"jit_optimize_above_cost", PGC_USERSET, QUERY_TUNING_COST,
+			gettext_noop("Optimize JITed functions if query is more expensive."),
+			gettext_noop("-1 disables optimization.")
+		},
+		&jit_optimize_above_cost,
+		500000, -1, DBL_MAX,
 		NULL, NULL, NULL
 	},
 
