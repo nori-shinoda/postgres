@@ -3359,8 +3359,10 @@ DESCR("true if wal replay is paused");
 
 DATA(insert OID = 2621 ( pg_reload_conf			PGNSP PGUID 12 1 0 0 0 f f f t f v s 0 0 16 "" _null_ _null_ _null_ _null_ _null_ pg_reload_conf _null_ _null_ _null_ ));
 DESCR("reload configuration files");
-DATA(insert OID = 2622 ( pg_rotate_logfile		PGNSP PGUID 12 1 0 0 0 f f f t f v s 0 0 16 "" _null_ _null_ _null_ _null_ _null_ pg_rotate_logfile _null_ _null_ _null_ ));
+DATA(insert OID = 2622 ( pg_rotate_logfile		PGNSP PGUID 12 1 0 0 0 f f f t f v s 0 0 16 "" _null_ _null_ _null_ _null_ _null_ pg_rotate_logfile_v2 _null_ _null_ _null_ ));
 DESCR("rotate log file");
+DATA(insert OID = 4099 ( pg_rotate_logfile_old		PGNSP PGUID 12 1 0 0 0 f f f t f v s 0 0 16 "" _null_ _null_ _null_ _null_ _null_ pg_rotate_logfile _null_ _null_ _null_ ));
+DESCR("rotate log file - old version for adminpack 1.0");
 DATA(insert OID = 3800 ( pg_current_logfile				PGNSP PGUID 12 1 0 0 0 f f f f f v s 0 0 25 "" _null_ _null_ _null_ _null_ _null_ pg_current_logfile _null_ _null_ _null_ ));
 DESCR("current logging collector file location");
 DATA(insert OID = 3801 ( pg_current_logfile				PGNSP PGUID 12 1 0 0 0 f f f f f v s 1 0 25 "25" _null_ _null_ _null_ _null_ _null_ pg_current_logfile_1arg _null_ _null_ _null_ ));
@@ -3372,8 +3374,10 @@ DATA(insert OID = 3307 ( pg_stat_file		PGNSP PGUID 12 1 0 0 0 f f f t f v s 2 0 
 DESCR("get information about file");
 DATA(insert OID = 2624 ( pg_read_file		PGNSP PGUID 12 1 0 0 0 f f f t f v s 3 0 25 "25 20 20" _null_ _null_ _null_ _null_ _null_ pg_read_file_off_len _null_ _null_ _null_ ));
 DESCR("read text from a file");
-DATA(insert OID = 3293 ( pg_read_file		PGNSP PGUID 12 1 0 0 0 f f f t f v s 4 0 25 "25 20 20 16" _null_ _null_ _null_ _null_ _null_ pg_read_file _null_ _null_ _null_ ));
+DATA(insert OID = 3293 ( pg_read_file		PGNSP PGUID 12 1 0 0 0 f f f t f v s 4 0 25 "25 20 20 16" _null_ _null_ _null_ _null_ _null_ pg_read_file_v2 _null_ _null_ _null_ ));
 DESCR("read text from a file");
+DATA(insert OID = 4100 ( pg_read_file_old		PGNSP PGUID 12 1 0 0 0 f f f t f v s 3 0 25 "25 20 20" _null_ _null_ _null_ _null_ _null_ pg_read_file _null_ _null_ _null_ ));
+DESCR("read text from a file - old version for adminpack 1.0");
 DATA(insert OID = 3826 ( pg_read_file		PGNSP PGUID 12 1 0 0 0 f f f t f v s 1 0 25 "25" _null_ _null_ _null_ _null_ _null_ pg_read_file_all _null_ _null_ _null_ ));
 DESCR("read text from a file");
 DATA(insert OID = 3827 ( pg_read_binary_file	PGNSP PGUID 12 1 0 0 0 f f f t f v s 3 0 17 "25 20 20" _null_ _null_ _null_ _null_ _null_ pg_read_binary_file_off_len _null_ _null_ _null_ ));
@@ -4971,6 +4975,8 @@ DATA(insert OID = 3747 (  plainto_tsquery	PGNSP PGUID 12 100 0 0 0 f f f t f i s
 DESCR("transform to tsquery");
 DATA(insert OID = 5006 (  phraseto_tsquery	PGNSP PGUID 12 100 0 0 0 f f f t f i s 2 0 3615 "3734 25" _null_ _null_ _null_ _null_ _null_ phraseto_tsquery_byid _null_ _null_ _null_ ));
 DESCR("transform to tsquery");
+DATA(insert OID = 8889 (  websearch_to_tsquery	PGNSP PGUID 12 100 0 0 0 f f f  t f i s 2 0 3615 "3734 25" _null_ _null_ _null_ _null_ _null_ websearch_to_tsquery_byid _null_ _null_ _null_ ));
+DESCR("transform to tsquery");
 DATA(insert OID = 3749 (  to_tsvector		PGNSP PGUID 12 100 0 0 0 f f f t f s s 1 0 3614 "25" _null_ _null_ _null_ _null_ _null_ to_tsvector _null_ _null_ _null_ ));
 DESCR("transform to tsvector");
 DATA(insert OID = 3750 (  to_tsquery		PGNSP PGUID 12 100 0 0 0 f f f t f s s 1 0 3615 "25" _null_ _null_ _null_ _null_ _null_ to_tsquery _null_ _null_ _null_ ));
@@ -4978,6 +4984,8 @@ DESCR("make tsquery");
 DATA(insert OID = 3751 (  plainto_tsquery	PGNSP PGUID 12 100 0 0 0 f f f t f s s 1 0 3615 "25" _null_ _null_ _null_ _null_ _null_ plainto_tsquery _null_ _null_ _null_ ));
 DESCR("transform to tsquery");
 DATA(insert OID = 5001 (  phraseto_tsquery	PGNSP PGUID 12 100 0 0 0 f f f t f s s 1 0 3615 "25" _null_ _null_ _null_ _null_ _null_ phraseto_tsquery _null_ _null_ _null_ ));
+DESCR("transform to tsquery");
+DATA(insert OID = 8890 (  websearch_to_tsquery	PGNSP PGUID 12 100 0 0 0 f f f t f s s 1 0 3615 "25" _null_ _null_ _null_ _null_ _null_ websearch_to_tsquery _null_ _null_ _null_ ));
 DESCR("transform to tsquery");
 DATA(insert OID = 4209 (  to_tsvector		PGNSP PGUID 12 100 0 0 0 f f f t f s s 1 0 3614 "3802" _null_ _null_ _null_ _null_ _null_ jsonb_to_tsvector _null_ _null_ _null_ ));
 DESCR("transform jsonb to tsvector");
@@ -5578,6 +5586,11 @@ DESCR("pg_controldata recovery state information as a function");
 
 DATA(insert OID = 3444 ( pg_control_init PGNSP PGUID 12 1 0 0 0 f f f t f v s 0 0 2249 "" "{23,23,23,23,23,23,23,23,23,16,16,23}" "{o,o,o,o,o,o,o,o,o,o,o,o}" "{max_data_alignment,database_block_size,blocks_per_segment,wal_block_size,bytes_per_wal_segment,max_identifier_length,max_index_columns,max_toast_chunk_size,large_object_chunk_size,float4_pass_by_value,float8_pass_by_value,data_page_checksum_version}" _null_ _null_ pg_control_init _null_ _null_ _null_ ));
 DESCR("pg_controldata init state information as a function");
+
+DATA(insert OID = 3996 ( pg_disable_data_checksums		PGNSP PGUID 12 1 0 0 0 f f f t f v s 0 0 2278 "" _null_ _null_ _null_ _null_ _null_ disable_data_checksums _null_ _null_ _null_ ));
+DESCR("disable data checksums");
+DATA(insert OID = 3998 ( pg_enable_data_checksums		PGNSP PGUID 12 1 0 0 0 f f f t f v s 2 0 2278 "23 23" _null_ _null_ "{cost_delay,cost_limit}" _null_ _null_ enable_data_checksums _null_ _null_ _null_ ));
+DESCR("enable data checksums");
 
 /* collation management functions */
 DATA(insert OID = 3445 ( pg_import_system_collations PGNSP PGUID 12 100 0 0 0 f f f t f v u 1 0 23 "4089" _null_ _null_ _null_ _null_ _null_ pg_import_system_collations _null_ _null_ _null_ ));

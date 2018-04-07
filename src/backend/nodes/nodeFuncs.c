@@ -2156,6 +2156,17 @@ expression_tree_walker(Node *node,
 					return true;
 			}
 			break;
+		case T_PartitionPruneStepOp:
+			{
+				PartitionPruneStepOp *opstep = (PartitionPruneStepOp *) node;
+
+				if (walker((Node *) opstep->exprs, context))
+					return true;
+			}
+			break;
+		case T_PartitionPruneStepCombine:
+			/* no expression subnodes */
+			break;
 		case T_JoinExpr:
 			{
 				JoinExpr   *join = (JoinExpr *) node;
@@ -2958,6 +2969,20 @@ expression_tree_mutator(Node *node,
 				return (Node *) newnode;
 			}
 			break;
+		case T_PartitionPruneStepOp:
+			{
+				PartitionPruneStepOp *opstep = (PartitionPruneStepOp *) node;
+				PartitionPruneStepOp *newnode;
+
+				FLATCOPY(newnode, opstep, PartitionPruneStepOp);
+				MUTATE(newnode->exprs, opstep->exprs, List *);
+
+				return (Node *) newnode;
+			}
+			break;
+		case T_PartitionPruneStepCombine:
+			/* no expression sub-nodes */
+			return (Node *) copyObject(node);
 		case T_JoinExpr:
 			{
 				JoinExpr   *join = (JoinExpr *) node;
@@ -3444,19 +3469,23 @@ raw_expression_tree_walker(Node *node,
 					return true;
 				if (walker(stmt->join_condition, context))
 					return true;
-				if (walker(stmt->mergeActionList, context))
+				if (walker(stmt->mergeWhenClauses, context))
 					return true;
 				if (walker(stmt->withClause, context))
 					return true;
 			}
 			break;
-		case T_MergeAction:
+		case T_MergeWhenClause:
 			{
-				MergeAction *action = (MergeAction *) node;
+				MergeWhenClause *mergeWhenClause = (MergeWhenClause *) node;
 
-				if (walker(action->targetList, context))
+				if (walker(mergeWhenClause->condition, context))
 					return true;
-				if (walker(action->qual, context))
+				if (walker(mergeWhenClause->targetList, context))
+					return true;
+				if (walker(mergeWhenClause->cols, context))
+					return true;
+				if (walker(mergeWhenClause->values, context))
 					return true;
 			}
 			break;

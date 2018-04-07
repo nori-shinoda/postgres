@@ -1544,7 +1544,8 @@ ApplyWorkerMain(Datum main_arg)
 
 	/* Connect to our database. */
 	BackgroundWorkerInitializeConnectionByOid(MyLogicalRepWorker->dbid,
-											  MyLogicalRepWorker->userid);
+											  MyLogicalRepWorker->userid,
+											  0);
 
 	/* Load the subscription into persistent memory context. */
 	ApplyContext = AllocSetContextCreate(TopMemoryContext,
@@ -1552,13 +1553,19 @@ ApplyWorkerMain(Datum main_arg)
 										 ALLOCSET_DEFAULT_SIZES);
 	StartTransactionCommand();
 	oldctx = MemoryContextSwitchTo(ApplyContext);
-	MySubscription = GetSubscription(MyLogicalRepWorker->subid, false);
+
+	MySubscription = GetSubscription(MyLogicalRepWorker->subid, true);
+	if (!MySubscription)
+	{
+		ereport(LOG,
+				(errmsg("logical replication apply worker for subscription %u will not "
+						"start because the subscription was removed during startup",
+						MyLogicalRepWorker->subid)));
+		proc_exit(0);
+	}
+
 	MySubscriptionValid = true;
 	MemoryContextSwitchTo(oldctx);
-
-	/* Setup synchronous commit according to the user's wishes */
-	SetConfigOption("synchronous_commit", MySubscription->synccommit,
-					PGC_BACKEND, PGC_S_OVERRIDE);
 
 	if (!MySubscription->enabled)
 	{
@@ -1569,6 +1576,10 @@ ApplyWorkerMain(Datum main_arg)
 
 		proc_exit(0);
 	}
+
+	/* Setup synchronous commit according to the user's wishes */
+	SetConfigOption("synchronous_commit", MySubscription->synccommit,
+					PGC_BACKEND, PGC_S_OVERRIDE);
 
 	/* Keep us informed about subscription changes. */
 	CacheRegisterSyscacheCallback(SUBSCRIPTIONOID,
