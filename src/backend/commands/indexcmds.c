@@ -25,9 +25,8 @@
 #include "catalog/indexing.h"
 #include "catalog/partition.h"
 #include "catalog/pg_am.h"
-#include "catalog/pg_constraint_fn.h"
+#include "catalog/pg_constraint.h"
 #include "catalog/pg_inherits.h"
-#include "catalog/pg_inherits_fn.h"
 #include "catalog/pg_opclass.h"
 #include "catalog/pg_opfamily.h"
 #include "catalog/pg_tablespace.h"
@@ -183,9 +182,13 @@ CheckIndexCompatible(Oid oldId,
 	 * the new index, so we can test whether it's compatible with the existing
 	 * one.  Note that ComputeIndexAttrs might fail here, but that's OK:
 	 * DefineIndex would have called this function with the same arguments
-	 * later on, and it would have failed then anyway.
+	 * later on, and it would have failed then anyway.  Our attributeList
+	 * contains only key attributes, thus we're filling ii_NumIndexAttrs and
+	 * ii_NumIndexKeyAttrs with same value.
 	 */
 	indexInfo = makeNode(IndexInfo);
+	indexInfo->ii_NumIndexAttrs = numberOfAttributes;
+	indexInfo->ii_NumIndexKeyAttrs = numberOfAttributes;
 	indexInfo->ii_Expressions = NIL;
 	indexInfo->ii_ExpressionsState = NIL;
 	indexInfo->ii_PredicateState = NULL;
@@ -651,7 +654,7 @@ DefineIndex(Oid relationId,
 
 	typeObjectId = (Oid *) palloc(numberOfAttributes * sizeof(Oid));
 	collationObjectId = (Oid *) palloc(numberOfAttributes * sizeof(Oid));
-	classObjectId = (Oid *) palloc(numberOfKeyAttributes * sizeof(Oid));
+	classObjectId = (Oid *) palloc(numberOfAttributes * sizeof(Oid));
 	coloptions = (int16 *) palloc(numberOfAttributes * sizeof(int16));
 	ComputeIndexAttrs(indexInfo,
 					  typeObjectId, collationObjectId, classObjectId,
@@ -1519,10 +1522,11 @@ ComputeIndexAttrs(IndexInfo *indexInfo,
 		collationOidP[attn] = attcollation;
 
 		/*
-		 * Skip opclass and ordering options for included columns.
+		 * Included columns have no opclass and no ordering options.
 		 */
 		if (attn >= nkeycols)
 		{
+			classOidP[attn] = InvalidOid;
 			colOptionP[attn] = 0;
 			attn++;
 			continue;
