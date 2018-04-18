@@ -238,6 +238,48 @@ explain (costs off) select * from rparted_by_int2 where a > 100000000000000;
 
 drop table lp, coll_pruning, rlp, mc3p, mc2p, boolpart, rp, coll_pruning_multi, like_op_noprune, lparted_by_int2, rparted_by_int2;
 
+--
+-- Test Partition pruning for HASH partitioning
+--
+-- Use hand-rolled hash functions and operator classes to get predictable
+-- result on different matchines.  See the definitions of
+-- part_part_test_int4_ops and part_test_text_ops in insert.sql.
+--
+
+create table hp (a int, b text) partition by hash (a part_test_int4_ops, b part_test_text_ops);
+create table hp0 partition of hp for values with (modulus 4, remainder 0);
+create table hp3 partition of hp for values with (modulus 4, remainder 3);
+create table hp1 partition of hp for values with (modulus 4, remainder 1);
+create table hp2 partition of hp for values with (modulus 4, remainder 2);
+
+insert into hp values (null, null);
+insert into hp values (1, null);
+insert into hp values (1, 'xxx');
+insert into hp values (null, 'xxx');
+insert into hp values (2, 'xxx');
+insert into hp values (1, 'abcde');
+select tableoid::regclass, * from hp order by 1;
+
+-- partial keys won't prune, nor would non-equality conditions
+explain (costs off) select * from hp where a = 1;
+explain (costs off) select * from hp where b = 'xxx';
+explain (costs off) select * from hp where a is null;
+explain (costs off) select * from hp where b is null;
+explain (costs off) select * from hp where a < 1 and b = 'xxx';
+explain (costs off) select * from hp where a <> 1 and b = 'yyy';
+explain (costs off) select * from hp where a <> 1 and b <> 'xxx';
+
+-- pruning should work if either a value or a IS NULL clause is provided for
+-- each of the keys
+explain (costs off) select * from hp where a is null and b is null;
+explain (costs off) select * from hp where a = 1 and b is null;
+explain (costs off) select * from hp where a = 1 and b = 'xxx';
+explain (costs off) select * from hp where a is null and b = 'xxx';
+explain (costs off) select * from hp where a = 2 and b = 'xxx';
+explain (costs off) select * from hp where a = 1 and b = 'abcde';
+explain (costs off) select * from hp where (a = 1 and b = 'abcde') or (a = 2 and b = 'xxx') or (a is null and b is null);
+
+drop table hp;
 
 --
 -- Test runtime partition pruning
@@ -318,6 +360,28 @@ execute ab_q3 (1, 8);
 explain (analyze, costs off, summary off, timing off) execute ab_q3 (2, 2);
 
 -- Parallel append
+
+-- Suppress the number of loops each parallel node runs for.  This is because
+-- more than one worker may run the same parallel node if timing conditions
+-- are just right, which destabilizes the test.
+create function explain_parallel_append(text) returns setof text
+language plpgsql as
+$$
+declare
+    ln text;
+begin
+    for ln in
+        execute format('explain (analyze, costs off, summary off, timing off) %s',
+            $1)
+    loop
+        if ln like '%Parallel%' then
+            ln := regexp_replace(ln, 'loops=\d*',  'loops=N');
+        end if;
+        return next ln;
+    end loop;
+end;
+$$;
+
 prepare ab_q4 (int, int) as
 select avg(a) from ab where a between $1 and $2 and b < 4;
 
@@ -334,8 +398,7 @@ execute ab_q4 (1, 8);
 execute ab_q4 (1, 8);
 execute ab_q4 (1, 8);
 execute ab_q4 (1, 8);
-
-explain (analyze, costs off, summary off, timing off) execute ab_q4 (2, 2);
+select explain_parallel_append('execute ab_q4 (2, 2)');
 
 -- Test run-time pruning with IN lists.
 prepare ab_q5 (int, int, int) as
@@ -349,14 +412,17 @@ execute ab_q5 (1, 2, 3);
 execute ab_q5 (1, 2, 3);
 execute ab_q5 (1, 2, 3);
 
-explain (analyze, costs off, summary off, timing off) execute ab_q5 (1, 1, 1);
-explain (analyze, costs off, summary off, timing off) execute ab_q5 (2, 3, 3);
+select explain_parallel_append('execute ab_q5 (1, 1, 1)');
+select explain_parallel_append('execute ab_q5 (2, 3, 3)');
 
 -- Try some params whose values do not belong to any partition.
 -- We'll still get a single subplan in this case, but it should not be scanned.
-explain (analyze, costs off, summary off, timing off) execute ab_q5 (33, 44, 55);
+select explain_parallel_append('execute ab_q5 (33, 44, 55)');
 
--- Test parallel Append with IN list and parameterized nested loops
+-- Test Parallel Append with exec params
+select explain_parallel_append('select count(*) from ab where (a = (select 1) or a = (select 3)) and b = 2');
+
+-- Test pruning during parallel nested loop query
 create table lprt_a (a int not null);
 -- Insert some values we won't find in ab
 insert into lprt_a select 0 from generate_series(1,100);
@@ -379,24 +445,16 @@ create index ab_a3_b3_a_idx on ab_a3_b3 (a);
 set enable_hashjoin = 0;
 set enable_mergejoin = 0;
 
-prepare ab_q6 (int, int, int) as
-select avg(ab.a) from ab inner join lprt_a a on ab.a = a.a where a.a in($1,$2,$3);
-execute ab_q6 (1, 2, 3);
-execute ab_q6 (1, 2, 3);
-execute ab_q6 (1, 2, 3);
-execute ab_q6 (1, 2, 3);
-execute ab_q6 (1, 2, 3);
-
-explain (analyze, costs off, summary off, timing off) execute ab_q6 (0, 0, 1);
+select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on ab.a = a.a where a.a in(0, 0, 1)');
 
 insert into lprt_a values(3),(3);
 
-explain (analyze, costs off, summary off, timing off) execute ab_q6 (1, 0, 3);
-explain (analyze, costs off, summary off, timing off) execute ab_q6 (1, 0, 0);
+select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on ab.a = a.a where a.a in(1, 0, 3)');
+select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on ab.a = a.a where a.a in(1, 0, 0)');
 
 delete from lprt_a where a = 1;
 
-explain (analyze, costs off, summary off, timing off) execute ab_q6 (1, 0, 0);
+select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on ab.a = a.a where a.a in(1, 0, 0)');
 
 reset enable_hashjoin;
 reset enable_mergejoin;
@@ -414,7 +472,6 @@ deallocate ab_q2;
 deallocate ab_q3;
 deallocate ab_q4;
 deallocate ab_q5;
-deallocate ab_q6;
 
 drop table ab, lprt_a;
 

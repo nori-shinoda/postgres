@@ -11,9 +11,9 @@
  *
  *-------------------------------------------------------------------------
  */
-
 #include "postgres.h"
 
+#include "catalog/partition.h"
 #include "catalog/pg_inherits.h"
 #include "catalog/pg_type.h"
 #include "executor/execPartition.h"
@@ -22,9 +22,15 @@
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
+#include "partitioning/partbounds.h"
+#include "partitioning/partprune.h"
+#include "rewrite/rewriteManip.h"
 #include "utils/lsyscache.h"
+#include "utils/partcache.h"
+#include "utils/rel.h"
 #include "utils/rls.h"
 #include "utils/ruleutils.h"
+
 
 static PartitionDispatch *RelationGetPartitionDispatchInfo(Relation rel,
 								 int *num_parted, List **leaf_part_oids);
@@ -35,6 +41,8 @@ static void FormPartitionKeyDatum(PartitionDispatch pd,
 					  EState *estate,
 					  Datum *values,
 					  bool *isnull);
+static int get_partition_for_tuple(Relation relation, Datum *values,
+						bool *isnull);
 static char *ExecBuildSlotPartitionKeyDescription(Relation rel,
 									 Datum *values,
 									 bool *isnull,
@@ -300,8 +308,12 @@ ExecInitPartitionInfo(ModifyTableState *mtstate,
 	ModifyTable *node = (ModifyTable *) mtstate->ps.plan;
 	Relation	rootrel = resultRelInfo->ri_RelationDesc,
 				partrel;
+	Relation	firstResultRel = mtstate->resultRelInfo[0].ri_RelationDesc;
 	ResultRelInfo *leaf_part_rri;
 	MemoryContext oldContext;
+	AttrNumber *part_attnos = NULL;
+	bool		found_whole_row;
+	bool		equalTupdescs;
 
 	/*
 	 * We locked all the partitions in ExecSetupPartitionTupleRouting
@@ -349,6 +361,10 @@ ExecInitPartitionInfo(ModifyTableState *mtstate,
 						(node != NULL &&
 						 node->onConflictAction != ONCONFLICT_NONE));
 
+	/* if tuple descs are identical, we don't need to map the attrs */
+	equalTupdescs = equalTupleDescs(RelationGetDescr(partrel),
+									RelationGetDescr(firstResultRel));
+
 	/*
 	 * Build WITH CHECK OPTION constraints for the partition.  Note that we
 	 * didn't build the withCheckOptionList for partitions within the planner,
@@ -362,7 +378,6 @@ ExecInitPartitionInfo(ModifyTableState *mtstate,
 		List	   *wcoExprs = NIL;
 		ListCell   *ll;
 		int			firstVarno = mtstate->resultRelInfo[0].ri_RangeTableIndex;
-		Relation	firstResultRel = mtstate->resultRelInfo[0].ri_RelationDesc;
 
 		/*
 		 * In the case of INSERT on a partitioned table, there is only one
@@ -390,8 +405,22 @@ ExecInitPartitionInfo(ModifyTableState *mtstate,
 		/*
 		 * Convert Vars in it to contain this partition's attribute numbers.
 		 */
-		wcoList = map_partition_varattnos(wcoList, firstVarno,
-										  partrel, firstResultRel, NULL);
+		if (!equalTupdescs)
+		{
+			part_attnos =
+				convert_tuples_by_name_map(RelationGetDescr(partrel),
+										   RelationGetDescr(firstResultRel),
+										   gettext_noop("could not convert row type"));
+			wcoList = (List *)
+				map_variable_attnos((Node *) wcoList,
+									firstVarno, 0,
+									part_attnos,
+									RelationGetDescr(firstResultRel)->natts,
+									RelationGetForm(partrel)->reltype,
+									&found_whole_row);
+			/* We ignore the value of found_whole_row. */
+		}
+
 		foreach(ll, wcoList)
 		{
 			WithCheckOption *wco = castNode(WithCheckOption, lfirst(ll));
@@ -418,7 +447,6 @@ ExecInitPartitionInfo(ModifyTableState *mtstate,
 		ExprContext *econtext;
 		List	   *returningList;
 		int			firstVarno = mtstate->resultRelInfo[0].ri_RangeTableIndex;
-		Relation	firstResultRel = mtstate->resultRelInfo[0].ri_RelationDesc;
 
 		/* See the comment above for WCO lists. */
 		Assert((node->operation == CMD_INSERT &&
@@ -436,12 +464,26 @@ ExecInitPartitionInfo(ModifyTableState *mtstate,
 		 */
 		returningList = linitial(node->returningLists);
 
-		/*
-		 * Convert Vars in it to contain this partition's attribute numbers.
-		 */
-		returningList = map_partition_varattnos(returningList, firstVarno,
-												partrel, firstResultRel,
-												NULL);
+		if (!equalTupdescs)
+		{
+			/*
+			 * Convert Vars in it to contain this partition's attribute numbers.
+			 */
+			if (part_attnos == NULL)
+				part_attnos =
+					convert_tuples_by_name_map(RelationGetDescr(partrel),
+											   RelationGetDescr(firstResultRel),
+											   gettext_noop("could not convert row type"));
+			returningList = (List *)
+				map_variable_attnos((Node *) returningList,
+									firstVarno, 0,
+									part_attnos,
+									RelationGetDescr(firstResultRel)->natts,
+									RelationGetForm(partrel)->reltype,
+									&found_whole_row);
+			/* We ignore the value of found_whole_row. */
+		}
+
 		leaf_part_rri->ri_returningList = returningList;
 
 		/*
@@ -466,7 +508,6 @@ ExecInitPartitionInfo(ModifyTableState *mtstate,
 	{
 		TupleConversionMap *map = proute->parent_child_tupconv_maps[partidx];
 		int			firstVarno = mtstate->resultRelInfo[0].ri_RangeTableIndex;
-		Relation	firstResultRel = mtstate->resultRelInfo[0].ri_RelationDesc;
 		TupleDesc	partrelDesc = RelationGetDescr(partrel);
 		ExprContext *econtext = mtstate->ps.ps_ExprContext;
 		ListCell   *lc;
@@ -542,17 +583,33 @@ ExecInitPartitionInfo(ModifyTableState *mtstate,
 				 * target relation (firstVarno).
 				 */
 				onconflset = (List *) copyObject((Node *) node->onConflictSet);
-				onconflset =
-					map_partition_varattnos(onconflset, INNER_VAR, partrel,
-											firstResultRel, &found_whole_row);
-				Assert(!found_whole_row);
-				onconflset =
-					map_partition_varattnos(onconflset, firstVarno, partrel,
-											firstResultRel, &found_whole_row);
-				Assert(!found_whole_row);
+				if (!equalTupdescs)
+				{
+					if (part_attnos == NULL)
+						part_attnos =
+							convert_tuples_by_name_map(RelationGetDescr(partrel),
+													   RelationGetDescr(firstResultRel),
+													   gettext_noop("could not convert row type"));
+					onconflset = (List *)
+						map_variable_attnos((Node *) onconflset,
+											INNER_VAR, 0,
+											part_attnos,
+											RelationGetDescr(firstResultRel)->natts,
+											RelationGetForm(partrel)->reltype,
+											&found_whole_row);
+					/* We ignore the value of found_whole_row. */
+					onconflset = (List *)
+						map_variable_attnos((Node *) onconflset,
+											firstVarno, 0,
+											part_attnos,
+											RelationGetDescr(firstResultRel)->natts,
+											RelationGetForm(partrel)->reltype,
+											&found_whole_row);
+					/* We ignore the value of found_whole_row. */
 
-				/* Finally, adjust this tlist to match the partition. */
-				onconflset = adjust_partition_tlist(onconflset, map);
+					/* Finally, adjust this tlist to match the partition. */
+					onconflset = adjust_partition_tlist(onconflset, map);
+				}
 
 				/*
 				 * Build UPDATE SET's projection info.  The user of this
@@ -580,14 +637,25 @@ ExecInitPartitionInfo(ModifyTableState *mtstate,
 					List	   *clause;
 
 					clause = copyObject((List *) node->onConflictWhere);
-					clause = map_partition_varattnos(clause, INNER_VAR,
-													 partrel, firstResultRel,
-													 &found_whole_row);
-					Assert(!found_whole_row);
-					clause = map_partition_varattnos(clause, firstVarno,
-													 partrel, firstResultRel,
-													 &found_whole_row);
-					Assert(!found_whole_row);
+					if (!equalTupdescs)
+					{
+						clause = (List *)
+							map_variable_attnos((Node *) clause,
+												INNER_VAR, 0,
+												part_attnos,
+												RelationGetDescr(firstResultRel)->natts,
+												RelationGetForm(partrel)->reltype,
+												&found_whole_row);
+						/* We ignore the value of found_whole_row. */
+						clause = (List *)
+							map_variable_attnos((Node *) clause,
+												firstVarno, 0,
+												part_attnos,
+												RelationGetDescr(firstResultRel)->natts,
+												RelationGetForm(partrel)->reltype,
+												&found_whole_row);
+						/* We ignore the value of found_whole_row. */
+					}
 					leaf_part_rri->ri_onConflict->oc_WhereClause =
 						ExecInitQual((List *) clause, &mtstate->ps);
 				}
@@ -1020,6 +1088,110 @@ FormPartitionKeyDatum(PartitionDispatch pd,
 
 	if (partexpr_item != NULL)
 		elog(ERROR, "wrong number of partition key expressions");
+}
+
+/*
+ * get_partition_for_tuple
+ *		Finds partition of relation which accepts the partition key specified
+ *		in values and isnull
+ *
+ * Return value is index of the partition (>= 0 and < partdesc->nparts) if one
+ * found or -1 if none found.
+ */
+int
+get_partition_for_tuple(Relation relation, Datum *values, bool *isnull)
+{
+	int			bound_offset;
+	int			part_index = -1;
+	PartitionKey key = RelationGetPartitionKey(relation);
+	PartitionDesc partdesc = RelationGetPartitionDesc(relation);
+
+	/* Route as appropriate based on partitioning strategy. */
+	switch (key->strategy)
+	{
+		case PARTITION_STRATEGY_HASH:
+			{
+				PartitionBoundInfo boundinfo = partdesc->boundinfo;
+				int			greatest_modulus = get_hash_partition_greatest_modulus(boundinfo);
+				uint64		rowHash = compute_hash_value(key->partnatts,
+														 key->partsupfunc,
+														 values, isnull);
+
+				part_index = boundinfo->indexes[rowHash % greatest_modulus];
+			}
+			break;
+
+		case PARTITION_STRATEGY_LIST:
+			if (isnull[0])
+			{
+				if (partition_bound_accepts_nulls(partdesc->boundinfo))
+					part_index = partdesc->boundinfo->null_index;
+			}
+			else
+			{
+				bool		equal = false;
+
+				bound_offset = partition_list_bsearch(key->partsupfunc,
+													  key->partcollation,
+													  partdesc->boundinfo,
+													  values[0], &equal);
+				if (bound_offset >= 0 && equal)
+					part_index = partdesc->boundinfo->indexes[bound_offset];
+			}
+			break;
+
+		case PARTITION_STRATEGY_RANGE:
+			{
+				bool		equal = false,
+							range_partkey_has_null = false;
+				int			i;
+
+				/*
+				 * No range includes NULL, so this will be accepted by the
+				 * default partition if there is one, and otherwise rejected.
+				 */
+				for (i = 0; i < key->partnatts; i++)
+				{
+					if (isnull[i])
+					{
+						range_partkey_has_null = true;
+						break;
+					}
+				}
+
+				if (!range_partkey_has_null)
+				{
+					bound_offset = partition_range_datum_bsearch(key->partsupfunc,
+																 key->partcollation,
+																 partdesc->boundinfo,
+																 key->partnatts,
+																 values,
+																 &equal);
+
+					/*
+					 * The bound at bound_offset is less than or equal to the
+					 * tuple value, so the bound at offset+1 is the upper
+					 * bound of the partition we're looking for, if there
+					 * actually exists one.
+					 */
+					part_index = partdesc->boundinfo->indexes[bound_offset + 1];
+				}
+			}
+			break;
+
+		default:
+			elog(ERROR, "unexpected partition strategy: %d",
+				 (int) key->strategy);
+	}
+
+	/*
+	 * part_index < 0 means we failed to find a partition of this parent. Use
+	 * the default partition, if there is one.
+	 */
+	if (part_index < 0)
+		part_index = partdesc->boundinfo->default_index;
+
+	return part_index;
 }
 
 /*
