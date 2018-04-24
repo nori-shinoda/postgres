@@ -359,6 +359,31 @@ execute ab_q3 (1, 8);
 
 explain (analyze, costs off, summary off, timing off) execute ab_q3 (2, 2);
 
+-- Test a backwards Append scan
+create table list_part (a int) partition by list (a);
+create table list_part1 partition of list_part for values in (1);
+create table list_part2 partition of list_part for values in (2);
+create table list_part3 partition of list_part for values in (3);
+create table list_part4 partition of list_part for values in (4);
+
+insert into list_part select generate_series(1,4);
+
+begin;
+
+-- Don't select an actual value out of the table as the order of the Append's
+-- subnodes may not be stable.
+declare cur SCROLL CURSOR for select 1 from list_part where a > (select 1) and a < (select 4);
+
+-- move beyond the final row
+move 3 from cur;
+
+-- Ensure we get two rows.
+fetch backward all from cur;
+
+commit;
+
+drop table list_part;
+
 -- Parallel append
 
 -- Suppress the number of loops each parallel node runs for.  This is because
@@ -698,3 +723,55 @@ create table pp_intrangepart2inf partition of pp_intrangepart for values in ('[2
 explain (costs off) select * from pp_intrangepart where a = '[1,2]'::int4range;
 explain (costs off) select * from pp_intrangepart where a = '(1,2)'::int4range;
 drop table pp_intrangepart;
+
+--
+-- Ensure the enable_partition_prune GUC properly disables partition pruning.
+--
+
+create table pp_lp (a int, value int) partition by list (a);
+create table pp_lp1 partition of pp_lp for values in(1);
+create table pp_lp2 partition of pp_lp for values in(2);
+
+explain (costs off) select * from pp_lp where a = 1;
+explain (costs off) update pp_lp set value = 10 where a = 1;
+explain (costs off) delete from pp_lp where a = 1;
+
+set enable_partition_pruning = off;
+
+set constraint_exclusion = 'partition'; -- this should not affect the result.
+
+explain (costs off) select * from pp_lp where a = 1;
+explain (costs off) update pp_lp set value = 10 where a = 1;
+explain (costs off) delete from pp_lp where a = 1;
+
+set constraint_exclusion = 'off'; -- this should not affect the result.
+
+explain (costs off) select * from pp_lp where a = 1;
+explain (costs off) update pp_lp set value = 10 where a = 1;
+explain (costs off) delete from pp_lp where a = 1;
+
+drop table pp_lp;
+
+-- Ensure enable_partition_prune does not affect non-partitioned tables.
+
+create table inh_lp (a int, value int);
+create table inh_lp1 (a int, value int, check(a = 1)) inherits (inh_lp);
+create table inh_lp2 (a int, value int, check(a = 2)) inherits (inh_lp);
+
+set constraint_exclusion = 'partition';
+
+-- inh_lp2 should be removed in the following 3 cases.
+explain (costs off) select * from inh_lp where a = 1;
+explain (costs off) update inh_lp set value = 10 where a = 1;
+explain (costs off) delete from inh_lp where a = 1;
+
+-- Ensure we don't exclude normal relations when we only expect to exclude
+-- inheritance children
+explain (costs off) update inh_lp1 set value = 10 where a = 2;
+
+\set VERBOSITY terse	\\ -- suppress cascade details
+drop table inh_lp cascade;
+\set VERBOSITY default
+
+reset enable_partition_pruning;
+reset constraint_exclusion;
