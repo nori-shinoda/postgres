@@ -137,8 +137,8 @@ my $found = 0;
 foreach my $oid (keys %oidcounts)
 {
 	next unless $oidcounts{$oid} > 1;
-	print "Duplicate oids detected:\n" if !$found;
-	print "$oid\n";
+	print STDERR "Duplicate OIDs detected:\n" if !$found;
+	print STDERR "$oid\n";
 	$found++;
 }
 die "found $found duplicate OID(s) in catalog data\n" if $found;
@@ -265,7 +265,6 @@ open my $shdescr, '>', $shdescrfile . $tmpext
 
 # Generate postgres.bki, postgres.description, postgres.shdescription,
 # and pg_*_d.h headers.
-print "Generating BKI files and symbol definition headers...\n";
 
 # version marker for .bki file
 print $bki "# PostgreSQL $major_version\n";
