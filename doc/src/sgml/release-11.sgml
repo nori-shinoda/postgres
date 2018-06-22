@@ -629,7 +629,7 @@ Branch: master [6bdf1303b] Avoid wrong results for power() with NaN
        </para>
 
        <para>
-        This features is disabled by default
+        This feature is disabled by default
         but can be enabled by changing <link
         linkend="guc-enable-partitionwise-join"><varname>enable_partitionwise_join</varname></link>.
        </para>
@@ -647,7 +647,7 @@ Branch: master [6bdf1303b] Avoid wrong results for power() with NaN
        </para>
 
        <para>
-        This features is disabled by default
+        This feature is disabled by default
         but can be enabled by changing <link
         linkend="guc-enable-partitionwise-aggregate"><varname>enable_partitionwise_aggregate</varname></link>.
        </para>
@@ -933,7 +933,7 @@ same commits as above
 -->
 
        <para>
-        Allow SP-GiST indexes to optionally use compression (Teodor Sigaev,
+        Allow SP-GiST to use lossy representation of leaf keys (Teodor Sigaev,
         Heikki Linnakangas, Alexander Korotkov, Nikita Glukhov)
        </para>
 
@@ -1083,7 +1083,7 @@ same commits as above
 -->
 
        <para>
-        Allow vacuum to avoid unnecesary index scans (Masahiko Sawada,
+        Allow vacuum to avoid unnecessary index scans (Masahiko Sawada,
         Alexander Korotkov)
        </para>
       </listitem>
@@ -1594,7 +1594,7 @@ same commits as above
 -->
 
        <para>
-        Allow replication slots to be advanced programatically, rather
+        Allow replication slots to be advanced programmatically, rather
         than be consumed by subscribers (Petr Jelinek)
        </para>
 
@@ -1704,7 +1704,7 @@ same commits as above
 
        <para>
         Allow <command>ALTER INDEX</command> to set statistics-gathering
-        targets for expression indexes (Alexander Korotkov, Adrien nayrat)
+        targets for expression indexes (Alexander Korotkov, Adrien Nayrat)
        </para>
 
        <para>

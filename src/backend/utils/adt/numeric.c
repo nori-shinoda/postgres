@@ -2185,7 +2185,7 @@ in_range_numeric_numeric(PG_FUNCTION_ARGS)
 	 */
 	if (NUMERIC_IS_NAN(offset) || NUMERIC_SIGN(offset) == NUMERIC_NEG)
 		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_PRECEDING_FOLLOWING_SIZE),
+				(errcode(ERRCODE_INVALID_PRECEDING_OR_FOLLOWING_SIZE),
 				 errmsg("invalid preceding or following size in window function")));
 
 	/*
@@ -4218,8 +4218,8 @@ numeric_poly_combine(PG_FUNCTION_ARGS)
 		state1->sumX = state2->sumX;
 		state1->sumX2 = state2->sumX2;
 #else
-		accum_sum_copy(&state2->sumX, &state1->sumX);
-		accum_sum_copy(&state2->sumX2, &state1->sumX2);
+		accum_sum_copy(&state1->sumX, &state2->sumX);
+		accum_sum_copy(&state1->sumX2, &state2->sumX2);
 #endif
 
 		MemoryContextSwitchTo(old_context);
