@@ -216,12 +216,12 @@ static const struct config_enum_entry bytea_output_options[] = {
  * they sort slightly different (see "log" level)
  */
 static const struct config_enum_entry client_message_level_options[] = {
-	{"debug", DEBUG2, true},
 	{"debug5", DEBUG5, false},
 	{"debug4", DEBUG4, false},
 	{"debug3", DEBUG3, false},
 	{"debug2", DEBUG2, false},
 	{"debug1", DEBUG1, false},
+	{"debug", DEBUG2, true},
 	{"log", LOG, false},
 	{"info", INFO, true},
 	{"notice", NOTICE, false},
@@ -233,12 +233,12 @@ static const struct config_enum_entry client_message_level_options[] = {
 };
 
 static const struct config_enum_entry server_message_level_options[] = {
-	{"debug", DEBUG2, true},
 	{"debug5", DEBUG5, false},
 	{"debug4", DEBUG4, false},
 	{"debug3", DEBUG3, false},
 	{"debug2", DEBUG2, false},
 	{"debug1", DEBUG1, false},
+	{"debug", DEBUG2, true},
 	{"info", INFO, false},
 	{"notice", NOTICE, false},
 	{"warning", WARNING, false},
@@ -3253,7 +3253,7 @@ static struct config_real ConfigureNamesReal[] =
 			NULL
 		},
 		&vacuum_cleanup_index_scale_factor,
-		0.1, 0.0, 100.0,
+		0.1, 0.0, 1e10,
 		NULL, NULL, NULL
 	},
 

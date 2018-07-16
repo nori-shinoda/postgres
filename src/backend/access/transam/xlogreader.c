@@ -747,7 +747,7 @@ XLogReaderValidatePageHeader(XLogReaderState *state, XLogRecPtr recptr,
 	XLByteToSeg(recptr, segno, state->wal_segment_size);
 	offset = XLogSegmentOffset(recptr, state->wal_segment_size);
 
-	XLogSegNoOffsetToRecPtr(segno, offset, recaddr, state->wal_segment_size);
+	XLogSegNoOffsetToRecPtr(segno, offset, state->wal_segment_size, recaddr);
 
 	if (hdr->xlp_magic != XLOG_PAGE_MAGIC)
 	{
@@ -829,9 +829,9 @@ XLogReaderValidatePageHeader(XLogReaderState *state, XLogRecPtr recptr,
 	}
 
 	/*
-	 * Check that the address on the page agrees with what we expected.
-	 * This check typically fails when an old WAL segment is recycled,
-	 * and hasn't yet been overwritten with new data yet.
+	 * Check that the address on the page agrees with what we expected. This
+	 * check typically fails when an old WAL segment is recycled, and hasn't
+	 * yet been overwritten with new data yet.
 	 */
 	if (hdr->xlp_pageaddr != recaddr)
 	{
