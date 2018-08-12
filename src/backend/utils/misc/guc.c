@@ -80,6 +80,7 @@
 #include "utils/builtins.h"
 #include "utils/bytea.h"
 #include "utils/guc_tables.h"
+#include "utils/float.h"
 #include "utils/memutils.h"
 #include "utils/pg_locale.h"
 #include "utils/plancache.h"
@@ -3720,6 +3721,21 @@ static struct config_string ConfigureNamesString[] =
 		&external_pid_file,
 		NULL,
 		check_canonical_path, NULL, NULL
+	},
+
+	{
+		{"ssl_library", PGC_INTERNAL, PRESET_OPTIONS,
+			gettext_noop("Name of the SSL library."),
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE
+		},
+		&ssl_library,
+#ifdef USE_SSL
+		"OpenSSL",
+#else
+		"",
+#endif
+		NULL, NULL, NULL
 	},
 
 	{
