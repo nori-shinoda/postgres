@@ -16,6 +16,7 @@
 
 #include "access/htup_details.h"
 #include "catalog/pg_user_mapping.h"
+#include "commands/defrem.h"
 #include "access/xact.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
